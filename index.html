@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The Reading Room — Book Club</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f6efe2;--card:#fffaf0;--ink:#2e1f16;--mute:#7a6755;--burg:#7a1f2b;--gold:#b08d3c;--line:#e3d6bf;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#1c140f;--card:#2a1e17;--ink:#f1e6d2;--mute:#b3a089;--burg:#d4616f;--gold:#d3ad5c;--line:#43332a}}
+:root[data-theme=dark]{--bg:#1c140f;--card:#2a1e17;--ink:#f1e6d2;--mute:#b3a089;--burg:#d4616f;--gold:#d3ad5c;--line:#43332a}
+*{box-sizing:border-box}html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 Inter,system-ui,sans-serif;padding-bottom:70px}
+h1,h2,h3{font-family:'Cormorant Garamond',Georgia,serif;margin:0 0 .4em;line-height:1.15}
+h1{font-size:2.3rem}h2{font-size:1.6rem;color:var(--burg)}h3{font-size:1.25rem}
+header{padding:22px 18px 8px;max-width:960px;margin:auto;display:flex;justify-content:space-between;align-items:center;gap:10px}
+header .logo{font-family:'Cormorant Garamond',Georgia,serif;font-size:1.5rem;font-weight:700}header .logo i{color:var(--gold)}
+nav{position:fixed;bottom:0;left:0;right:0;background:var(--card);border-top:1px solid var(--line);display:flex;justify-content:space-around;padding:6px 4px calc(6px + env(safe-area-inset-bottom,0px));z-index:5}
+nav button{background:none;border:0;color:var(--mute);font:500 12px Inter,sans-serif;padding:6px 8px;cursor:pointer;border-radius:8px}
+nav button.on{color:var(--burg);background:color-mix(in srgb,var(--gold) 18%,transparent)}
+main{max-width:960px;margin:auto;padding:10px 18px 30px;animation:f .35s}@keyframes f{from{opacity:0;transform:translateY(6px)}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin:0 0 14px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px}
+.row{display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap}.grow{flex:1;min-width:200px}
+.cover{width:110px;height:160px;border-radius:4px 8px 8px 4px;padding:10px;color:#fff;font:700 15px/1.2 'Cormorant Garamond',Georgia,serif;display:flex;align-items:flex-end;box-shadow:4px 4px 12px #0004,inset 6px 0 8px #0003;flex:none}
+.cover.lg{width:150px;height:220px;font-size:20px}
+button.b,.b{background:var(--burg);color:#fff;border:0;border-radius:8px;padding:8px 14px;font:500 14px Inter,sans-serif;cursor:pointer;transition:.2s}
+button.b:hover{filter:brightness(1.12)}button.g{background:none;color:var(--burg);border:1px solid var(--line)}
+input,select,textarea{width:100%;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font:inherit;margin:3px 0 8px}
+.mute{color:var(--mute);font-size:13px}.tag{display:inline-block;font-size:11px;padding:2px 8px;border-radius:20px;border:1px solid var(--gold);color:var(--gold);margin-right:4px}
+.big{font-family:'Cormorant Garamond',Georgia,serif;font-size:2rem;color:var(--gold)}
+.spoil{filter:blur(6px);cursor:pointer;user-select:none}.bar{height:8px;background:var(--line);border-radius:5px;overflow:hidden}.bar i{display:block;height:100%;background:var(--gold)}
+#toast{position:fixed;top:12px;right:12px;z-index:9;display:flex;flex-direction:column;gap:6px;max-width:300px}#toast div{background:var(--burg);color:#fff;padding:9px 12px;border-radius:10px;font-size:13px;animation:f .3s}
+.flex{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+</style></head><body>
+<header><div class="logo">❦ <i>The Reading Room</i></div><div class="flex"><span class="mute" id="who"></span><button class="b g" onclick="theme()" aria-label="Toggle theme">◐</button></div></header>
+<main id="m"><p class="mute">Opening the salon…</p></main>
+<nav id="nav"></nav><div id="toast" aria-live="polite"></div>
+<script>
+const TABS=[['home','Reading Room'],['shelf','Bookshelf'],['talk','Discuss'],['events','Events'],['arch','Archive'],['me','Me']];
+const S={books:[],votes:[],posts:[],reacts:[],events:[],rsvps:[],reviews:[],prog:[],bios:[],meta:[],tab:'home',sel:null,filt:'',names:{},seen:{}};
+let db,user,uid,admin=false,ready=false;
+const $=s=>document.querySelector(s),esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const val=i=>($('#'+i)||{}).value||'',nm=id=>S.names[id]||'A member';
+const cov=b=>{let h=0;for(const c of b.title)h=(h*31+c.charCodeAt(0))%360;return `style="background:linear-gradient(145deg,hsl(${h} 45% 28%),hsl(${(h+40)%360} 50% 18%))"`};
+const cover=(b,l)=>`<div class="cover ${l?'lg':''}" ${cov(b)}>${esc(b.title)}</div>`;
+const cur=()=>S.books.find(b=>b.status=='current'),closed=()=>(S.meta.find(x=>x.id=='club')||{}).closed;
+function theme(){const r=document.documentElement,d=getComputedStyle(r).getPropertyValue('--bg').trim()=='#1c140f';r.dataset.theme=d?'light':'dark'}
+function toast(t){const d=document.createElement('div');d.textContent=t;$('#toast').append(d);setTimeout(()=>d.remove(),5000)}
+function sub(n){db.collection(n).onSnapshot(s=>{S[n]=s.docs.map(d=>({id:d.id,...d.data()}));if(ready)s.docChanges().forEach(c=>{if(c.type=='added'&&!c.doc.metadata.hasPendingWrites){const d=c.doc.data();if(n=='books')toast('New suggestion: '+d.title);if(n=='posts')toast('New comment in discussion');if(n=='events')toast('New event: '+d.title)}});render()},e=>console.warn(e))}
+async function init(){
+ try{user=await claude.use('user');db=await claude.use('db')}catch(e){}
+ if(!db||!user){$('#m').innerHTML='<div class="card"><h2>Members only</h2><p>Please sign in to enter the club. Access is by invitation from the administrator.</p></div>';return}
+ uid=await user.id();admin=await user.canEdit();$('#who').textContent=(await user.me()).name;
+ ['books','votes','posts','reacts','events','rsvps','reviews','prog','bios','meta'].forEach(sub);setTimeout(()=>ready=true,2500)}
+async function render(){
+ const ids=new Set([uid]);['books','posts','reviews'].forEach(k=>S[k].forEach(x=>x.by&&ids.add(x.by)));
+ try{const p=await user.profiles([...ids]);for(const k in p)S.names[k]=p[k].name||'A member'}catch(e){}
+ $('#nav').innerHTML=TABS.map(t=>`<button class="${S.tab==t[0]?'on':''}" onclick="go('${t[0]}')">${t[1]}</button>`).join('');
+ const a=document.activeElement;if(a&&/INPUT|TEXTAREA|SELECT/.test(a.tagName)&&a.id)return;
+ $('#m').innerHTML=({home,shelf,talk,events,arch,me})[S.tab]();}
+function go(t){S.tab=t;render();scrollTo(0,0)}
+const vc=id=>S.votes.filter(v=>v.book==id).length,voted=id=>S.votes.some(v=>v.id==id+'_'+uid);
+const stars=n=>'★'.repeat(Math.round(n))+'☆'.repeat(5-Math.round(n));
+function avg(id){const r=S.reviews.filter(x=>x.book==id);return r.length?r.reduce((a,x)=>a+x.stars,0)/r.length:0}
+function home(){const b=cur(),ev=S.events.filter(e=>new Date(e.date)>Date.now()).sort((a,c)=>a.date<c.date?-1:1),n=ev[0];
+ const my=(S.prog.find(p=>p.id==uid)||{}).ch||0,pr=S.prog.length?Math.round(S.prog.reduce((a,p)=>a+p.ch,0)/S.prog.length):0;
+ const act=[...S.posts.map(p=>({t:p.ts,s:`${nm(p.by)} commented on ${(S.books.find(x=>x.id==p.book)||{}).title||'a book'}`})),...S.books.map(x=>({t:x.ts,s:`${nm(x.by)} suggested “${x.title}”`}))].sort((a,c)=>c.t-a.t).slice(0,5);
+ return `<h1>Welcome to the salon.</h1><p class="mute">A private place for the books we read together.</p>`+
+ (admin&&!S.books.length?`<div class="card"><b>Empty club.</b> As administrator you can <button class="b" onclick="seed()">load sample data</button></div>`:'')+
+ (b?`<div class="card row">${cover(b,1)}<div class="grow"><span class="tag">Now reading</span><h2>${esc(b.title)}</h2><div class="mute">by ${esc(b.author)} · ${esc(b.genre)}</div><p>${esc(b.desc)}</p>
+ <div class="mute">Club progress: chapter ${pr} of ${b.chapters}</div><div class="bar"><i style="width:${pr/b.chapters*100}%"></i></div>
+ <p class="mute">Your progress: chapter <b>${my}</b> <button class="b g" onclick="setCh(${Math.max(0,my-1)})">−</button> <button class="b g" onclick="setCh(${Math.min(b.chapters,my+1)})">+</button></p>
+ <button class="b" onclick="S.sel='${b.id}';go('talk')">Join the discussion</button></div></div>`:`<div class="card"><h3>No book selected yet</h3><p>Head to the Bookshelf and vote.</p></div>`)+
+ `<div class="grid"><div class="card"><h3>Next meeting</h3>${n?`<div class="big" id="cd" data-d="${n.date}"></div><div>${esc(n.title)}</div><div class="mute">${new Date(n.date).toLocaleString([], {dateStyle:'medium',timeStyle:'short'})}</div>`:'<p class="mute">Nothing scheduled.</p>'}</div>
+ <div class="card"><h3>Latest activity</h3>${act.map(a=>`<div class="mute">• ${esc(a.s)}</div>`).join('')||'<span class="mute">Quiet for now.</span>'}</div>
+ <div class="card"><h3>Voting</h3><p>${closed()?'Voting is closed.':'Voting is open — '+S.books.filter(x=>x.status=='suggested').length+' books in the running.'}</p><button class="b" onclick="go('shelf')">Visit the Bookshelf</button></div></div>
+ <h2>Recent suggestions</h2><div class="grid">${S.books.filter(x=>x.status=='suggested').sort((a,c)=>c.ts-a.ts).slice(0,3).map(x=>`<div class="card row">${cover(x)}<div class="grow"><h3>${esc(x.title)}</h3><div class="mute">${esc(x.author)}</div></div></div>`).join('')}</div>`}
+setInterval(()=>{const e=$('#cd');if(!e)return;let s=Math.max(0,(new Date(e.dataset.d)-Date.now())/1e3|0);e.textContent=`${s/86400|0}d ${s%86400/3600|0}h ${s%3600/60|0}m ${s%60}s`},1000);
+function setCh(n){db.doc('prog/'+uid).set({ch:n})}
+function shelf(){const g=[...new Set(S.books.map(b=>b.genre))],L=S.books.filter(b=>b.status=='suggested'&&(!S.filt||b.genre==S.filt)).sort((a,c)=>vc(c.id)-vc(a.id));
+ return `<h1>The Bookshelf</h1><div class="flex"><select id="gf" style="width:auto" onchange="S.filt=this.value;render()"><option value="">All genres</option>${g.map(x=>`<option ${x==S.filt?'selected':''}>${esc(x)}</option>`).join('')}</select>
+ ${admin?(closed()?`<button class="b" onclick="toggleVote()">Reopen voting</button>`:`<button class="b" onclick="closeVote()">Close voting &amp; select winner</button>`):''}</div><br>
+ <div class="grid">${L.map(b=>`<div class="card"><div class="row">${cover(b)}<div class="grow"><h3>${esc(b.title)}</h3><div class="mute">${esc(b.author)}</div><span class="tag">${esc(b.genre)}</span><div class="big">${vc(b.id)} <span class="mute" style="font-size:13px">votes</span></div></div></div>
+ <p class="mute">“${esc(b.why)}” — ${esc(nm(b.by))}</p>${b.link?`<a class="mute" href="${esc(b.link)}" target="_blank" rel="noopener">Goodreads / link ↗</a><br>`:''}
+ <div class="flex" style="margin-top:8px"><button class="b ${voted(b.id)?'g':''}" ${closed()?'disabled':''} onclick="vote('${b.id}')">${voted(b.id)?'Voted ✓ (undo)':'Vote'}</button>${admin?`<button class="b g" onclick="pick('${b.id}')">Select</button><button class="b g" onclick="del('books/${b.id}')">Remove</button>`:''}</div></div>`).join('')||'<p class="mute">No suggestions match.</p>'}</div>
+ <div class="card"><h2>Suggest a book</h2><input id="t" placeholder="Title"><input id="a" placeholder="Author"><input id="ge" placeholder="Genre"><input id="l" placeholder="Goodreads link (optional)"><textarea id="d" placeholder="Short description"></textarea><textarea id="w" placeholder="Why do you recommend it?"></textarea><button class="b" onclick="suggest()">Add to the shelf</button></div>`}
+function suggest(){const t=val('t').trim();if(!t)return toast('A title is needed');db.collection('books').add({title:t,author:val('a'),genre:val('ge')||'Fiction',link:val('l'),desc:val('d'),why:val('w'),status:'suggested',by:uid,ts:Date.now(),chapters:20}).then(()=>toast('Suggestion added'))}
+function vote(id){const r=db.doc('votes/'+id+'_'+uid);voted(id)?r.delete():r.set({book:id,uid})}
+function toggleVote(){db.doc('meta/club').set({closed:!closed()})}
+function pick(id){if(!confirm('Make this the current book?'))return;S.books.filter(b=>b.status=='current').forEach(b=>db.doc('books/'+b.id).update({status:'archived',done:Date.now()}));db.doc('books/'+id).update({status:'current',start:Date.now()});db.doc('meta/club').set({closed:false})}
+function closeVote(){const L=S.books.filter(b=>b.status=='suggested').sort((a,c)=>vc(c.id)-vc(a.id));if(!L.length)return;db.doc('meta/club').set({closed:true});toast('Voting closed. Leader: '+L[0].title);pick(L[0].id)}
+function del(p){if(confirm('Delete?'))db.doc(p).delete()}
+function talk(){const bk=S.books.filter(b=>b.status!='suggested');const b=S.books.find(x=>x.id==S.sel&&x.status!='suggested')||cur()||bk[0];if(!b)return '<h1>Discuss</h1><p class="mute">No book yet.</p>';S.sel=b.id;
+ const my=(S.prog.find(p=>p.id==uid)||{}).ch||0,P=S.posts.filter(p=>p.book==b.id).sort((x,y)=>y.ts-x.ts),rv=S.reviews.filter(r=>r.book==b.id),mine=rv.find(r=>r.by==uid)||{};
+ return `<h1>Discussion</h1><select onchange="S.sel=this.value;render()">${bk.map(x=>`<option value="${x.id}" ${x.id==b.id?'selected':''}>${esc(x.title)}</option>`).join('')}</select>
+ <div class="card"><div class="row">${cover(b)}<div class="grow"><h3>${esc(b.title)}</h3><div class="mute">${esc(b.author)} · ${avg(b.id)?stars(avg(b.id))+' ('+rv.length+')':'No ratings yet'}</div></div></div>
+ ${rv.map(r=>`<div class="mute" style="margin-top:6px">${stars(r.stars)} <b>${esc(nm(r.by))}</b>: ${esc(r.text)}</div>`).join('')}
+ <hr style="border:0;border-top:1px solid var(--line)"><b>Your review</b><select id="rs" style="width:auto">${[5,4,3,2,1].map(n=>`<option value="${n}" ${mine.stars==n?'selected':''}>${n} ★</option>`).join('')}</select><textarea id="rt" placeholder="Your thoughts">${esc(mine.text||'')}</textarea><button class="b" onclick="review('${b.id}')">Save review</button></div>
+ <div class="card"><h3>Start a thread</h3><select id="pk"><option>Discussion</option><option>Favorite quote</option><option>Question</option><option>Theory</option></select><div class="flex"><span class="mute">Chapter</span><input id="pc" type="number" min="0" max="${b.chapters||99}" value="${my}" style="width:80px"><label class="mute"><input type="checkbox" id="ps" style="width:auto"> Spoiler</label></div><textarea id="px" placeholder="Share an interpretation, a passage, a question…"></textarea><button class="b" onclick="post('${b.id}')">Post</button></div>
+ ${P.map(p=>{const hide=p.spoil||p.ch>my,n=S.reacts.filter(r=>r.post==p.id).length,m=S.reacts.some(r=>r.id==p.id+'_'+uid);
+ return `<div class="card"><span class="tag">${esc(p.kind)}</span><span class="mute">Ch. ${p.ch} · <b>${esc(nm(p.by))}</b></span>${hide?`<div class="mute">⚠ ${p.spoil?'Spoiler':'Beyond your progress (ch. '+my+')'} — tap to reveal</div>`:''}
+ <p class="${hide?'spoil':''}" ${hide?`onclick="this.className=''"`:''}>${esc(p.text)}</p><div class="flex"><button class="b g" onclick="react('${p.id}')">${m?'♥':'♡'} ${n}</button>${p.by==uid?`<button class="b g" onclick="edit('${p.id}')">Edit</button>`:''}${p.by==uid||admin?`<button class="b g" onclick="del('posts/${p.id}')">Delete</button>`:''}</div></div>`}).join('')||'<p class="mute">No threads yet — begin one.</p>'}`}
+function post(b){const t=val('px').trim();if(!t)return;db.collection('posts').add({book:b,text:t,kind:val('pk'),ch:+val('pc')||0,spoil:$('#ps').checked,by:uid,ts:Date.now()})}
+function edit(id){const p=S.posts.find(x=>x.id==id),t=prompt('Edit your post',p.text);if(t)db.doc('posts/'+id).update({text:t})}
+function react(id){const r=db.doc('reacts/'+id+'_'+uid);S.reacts.some(x=>x.id==id+'_'+uid)?r.delete():r.set({post:id,uid})}
+function review(b){db.doc('reviews/'+b+'_'+uid).set({book:b,by:uid,stars:+val('rs'),text:val('rt')}).then(()=>toast('Review saved'))}
+function events(){const L=[...S.events].sort((a,c)=>a.date<c.date?-1:1);
+ return `<h1>Club Events</h1>${L.map(e=>{const r=S.rsvps.filter(x=>x.ev==e.id).length,m=S.rsvps.some(x=>x.id==e.id+'_'+uid);return `<div class="card flex" style="justify-content:space-between"><div><span class="tag">${esc(e.kind)}</span><b>${esc(e.title)}</b><div class="mute">${new Date(e.date).toLocaleString([], {dateStyle:'full',timeStyle:'short'})} · ${r} going</div></div><div class="flex"><button class="b ${m?'g':''}" onclick="rsvp('${e.id}')">${m?'Going ✓':'RSVP'}</button>${admin?`<button class="b g" onclick="del('events/${e.id}')">✕</button>`:''}</div></div>`}).join('')||'<p class="mute">Nothing scheduled.</p>'}
+ ${admin?`<div class="card"><h3>Add event (admin)</h3><input id="et" placeholder="Title"><select id="ek"><option>Meeting</option><option>Discussion</option><option>Reading deadline</option><option>Voting period</option><option>Literary event</option></select><input id="ed" type="datetime-local"><button class="b" onclick="addEv()">Create</button></div>`:''}`}
+function addEv(){if(!val('et')||!val('ed'))return;db.collection('events').add({title:val('et'),kind:val('ek'),date:new Date(val('ed')).toISOString()})}
+function rsvp(id){const r=db.doc('rsvps/'+id+'_'+uid);S.rsvps.some(x=>x.id==id+'_'+uid)?r.delete():r.set({ev:id,uid})}
+function arch(){const L=S.books.filter(b=>b.status=='archived').sort((a,c)=>(c.done||0)-(a.done||0));
+ return `<h1>The Archive</h1><div class="grid">${L.map(b=>`<div class="card"><div class="row">${cover(b)}<div class="grow"><h3>${esc(b.title)}</h3><div class="mute">${esc(b.author)} · ${esc(b.genre)}</div><div class="mute">Selected ${b.start?new Date(b.start).toLocaleDateString():'—'} · Finished ${b.done?new Date(b.done).toLocaleDateString():'—'}</div><div>${avg(b.id)?stars(avg(b.id)):'Unrated'}</div><button class="b g" onclick="S.sel='${b.id}';go('talk')">Revisit discussion (${S.posts.filter(p=>p.book==b.id).length})</button></div></div></div>`).join('')||'<p class="mute">Books we finish will rest here.</p>'}</div>`}
+function me(){const bio=S.bios.find(x=>x.id==uid)||{},rv=S.reviews.filter(r=>r.by==uid),sg=S.books.filter(b=>b.by==uid),rd=S.books.filter(b=>b.status=='archived');
+ return `<h1>${esc(nm(uid))}</h1><div class="grid"><div class="card"><div class="big">${rd.length}</div>books with the club</div><div class="card"><div class="big">${rv.length}</div>reviews${rv.length?' · avg '+(rv.reduce((a,r)=>a+r.stars,0)/rv.length).toFixed(1)+'★':''}</div><div class="card"><div class="big">${S.posts.filter(p=>p.by==uid).length}</div>posts · ${sg.length} suggestions</div></div>
+ <div class="card"><h3>About me</h3><textarea id="bb" placeholder="Short biography">${esc(bio.bio||'')}</textarea><input id="bg" placeholder="Favorite genres" value="${esc(bio.genres||'')}"><input id="bq" placeholder="Favorite literary quote" value="${esc(bio.quote||'')}"><button class="b" onclick="db.doc('bios/'+uid).set({bio:val('bb'),genres:val('bg'),quote:val('bq')}).then(()=>toast('Profile saved'))">Save</button></div>
+ <h3>Members</h3>${S.bios.filter(x=>x.id!=uid).map(x=>`<div class="card"><b>${esc(nm(x.id))}</b><div class="mute">${esc(x.genres)}</div><i>${esc(x.quote)}</i><p>${esc(x.bio)}</p></div>`).join('')}
+ <h3>My suggestions</h3>${sg.map(b=>`<div class="mute">• ${esc(b.title)} — ${vc(b.id)} votes</div>`).join('')||'<span class="mute">None yet.</span>'}`}
+async function seed(){const d=864e5,B=[
+ ['The Remains of the Day','Kazuo Ishiguro','Literary','A butler’s motor trip through England becomes a reckoning with loyalty and regret.','current',24],
+ ['Piranesi','Susanna Clarke','Fantasy','A man lives in an endless house of tides and statues, keeping careful journals.','suggested',20],
+ ['Pachinko','Min Jin Lee','Historical','Four generations of a Korean family in Japan.','suggested',24],
+ ['The Secret History','Donna Tartt','Mystery','A circle of classics students and a fatal secret.','suggested',18],
+ ['Middlemarch','George Eliot','Classic','Provincial lives entwined in a changing England.','archived',30]];
+ for(const [t,a,g,ds,s,c] of B)await db.collection('books').add({title:t,author:a,genre:g,desc:ds,why:'It stayed with me long after the last page.',link:'',status:s,chapters:c,by:uid,ts:Date.now(),start:Date.now()-60*d,done:s=='archived'?Date.now()-20*d:null});
+ const E=[['Meeting: The Remains of the Day','Meeting',9],['Reading deadline: Part Three','Reading deadline',4],['Voting closes','Voting period',14]];
+ for(const [t,k,n] of E)await db.collection('events').add({title:t,kind:k,date:new Date(Date.now()+n*d).toISOString()});
+ toast('Sample data loaded')}
+init();
+</script></body></html>
