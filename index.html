@@ -41,16 +41,30 @@ let db,user,uid,admin=false,ready=false;
 const $=s=>document.querySelector(s),esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const val=i=>($('#'+i)||{}).value||'',nm=id=>S.names[id]||'A member';
 const cov=b=>{let h=0;for(const c of b.title)h=(h*31+c.charCodeAt(0))%360;return `style="background:linear-gradient(145deg,hsl(${h} 45% 28%),hsl(${(h+40)%360} 50% 18%))"`};
-const cover=(b,l)=>`<div class="cover ${l?'lg':''}" ${cov(b)}>${esc(b.title)}</div>`;
+const cover=(b,l)=>`<div class="cover ${l?'lg':''}" style="padding:0;overflow:hidden;">
+  ${b.image
+    ? `<img src="${esc(b.image)}" alt="${esc(b.title)} cover" style="width:100%;height:100%;object-fit:cover;border-radius:4px 8px 8px 4px;">`
+    : `<div ${cov(b)} style="width:100%;height:100%;display:flex;align-items:flex-end;padding:10px;">${esc(b.title)}</div>`
+  }
+</div>`;
 const cur=()=>S.books.find(b=>b.status=='current'),closed=()=>(S.meta.find(x=>x.id=='club')||{}).closed;
 function theme(){const r=document.documentElement,d=getComputedStyle(r).getPropertyValue('--bg').trim()=='#1c140f';r.dataset.theme=d?'light':'dark'}
 function toast(t){const d=document.createElement('div');d.textContent=t;$('#toast').append(d);setTimeout(()=>d.remove(),5000)}
 function sub(n){db.collection(n).onSnapshot(s=>{S[n]=s.docs.map(d=>({id:d.id,...d.data()}));if(ready)s.docChanges().forEach(c=>{if(c.type=='added'&&!c.doc.metadata.hasPendingWrites){const d=c.doc.data();if(n=='books')toast('New suggestion: '+d.title);if(n=='posts')toast('New comment in discussion');if(n=='events')toast('New event: '+d.title)}});render()},e=>console.warn(e))}
+function localDb(){const K='bookclub_v1';let D={};try{D=JSON.parse(localStorage.getItem(K)||'{}')}catch(e){}const L={},save=()=>{try{localStorage.setItem(K,JSON.stringify(D))}catch(e){}};
+const snap=n=>({docs:Object.entries(D[n]||{}).map(([id,v])=>({id,data:()=>v,metadata:{hasPendingWrites:false}})),docChanges:()=>[]}),fire=n=>(L[n]||[]).forEach(f=>f(snap(n)));
+const doc=p=>{const[n,id]=p.split('/');return{set(v){(D[n]=D[n]||{})[id]=v;save();fire(n);return Promise.resolve()},update(v){D[n]=D[n]||{};D[n][id]={...D[n][id],...v};save();fire(n);return Promise.resolve()},delete(){if(D[n])delete D[n][id];save();fire(n);return Promise.resolve()}}};
+const col=n=>({onSnapshot(f){(L[n]=L[n]||[]).push(f);f(snap(n));return()=>{}},add(v){const id=Math.random().toString(36).slice(2,10);(D[n]=D[n]||{})[id]=v;save();fire(n);return Promise.resolve({id})},doc:id=>doc(n+'/'+id)});
+return{collection:col,doc,empty:()=>!Object.keys(D).length}}
+var first=false;
 async function init(){
- try{user=await claude.use('user');db=await claude.use('db')}catch(e){}
+ db=localDb();first=db.empty();user={profiles:async ids=>Object.fromEntries(ids.map(i=>[i,{name:'You'}]))};
  if(!db||!user){$('#m').innerHTML='<div class="card"><h2>Members only</h2><p>Please sign in to enter the club. Access is by invitation from the administrator.</p></div>';return}
- uid=await user.id();admin=await user.canEdit();$('#who').textContent=(await user.me()).name;
- ['books','votes','posts','reacts','events','rsvps','reviews','prog','bios','meta'].forEach(sub);setTimeout(()=>ready=true,2500)}
+ uid='me';admin=true;$('#who').textContent='Saved on this device';
+ ['books','votes','posts','reacts','events','rsvps','reviews','prog','bios','meta'].forEach(sub);
+  ready=true;
+  setupReadingRoom();
+}
 async function render(){
  const ids=new Set([uid]);['books','posts','reviews'].forEach(k=>S[k].forEach(x=>x.by&&ids.add(x.by)));
  try{const p=await user.profiles([...ids]);for(const k in p)S.names[k]=p[k].name||'A member'}catch(e){}
@@ -82,8 +96,16 @@ function shelf(){const g=[...new Set(S.books.map(b=>b.genre))],L=S.books.filter(
  <div class="grid">${L.map(b=>`<div class="card"><div class="row">${cover(b)}<div class="grow"><h3>${esc(b.title)}</h3><div class="mute">${esc(b.author)}</div><span class="tag">${esc(b.genre)}</span><div class="big">${vc(b.id)} <span class="mute" style="font-size:13px">votes</span></div></div></div>
  <p class="mute">“${esc(b.why)}” — ${esc(nm(b.by))}</p>${b.link?`<a class="mute" href="${esc(b.link)}" target="_blank" rel="noopener">Goodreads / link ↗</a><br>`:''}
  <div class="flex" style="margin-top:8px"><button class="b ${voted(b.id)?'g':''}" ${closed()?'disabled':''} onclick="vote('${b.id}')">${voted(b.id)?'Voted ✓ (undo)':'Vote'}</button>${admin?`<button class="b g" onclick="pick('${b.id}')">Select</button><button class="b g" onclick="del('books/${b.id}')">Remove</button>`:''}</div></div>`).join('')||'<p class="mute">No suggestions match.</p>'}</div>
- <div class="card"><h2>Suggest a book</h2><input id="t" placeholder="Title"><input id="a" placeholder="Author"><input id="ge" placeholder="Genre"><input id="l" placeholder="Goodreads link (optional)"><textarea id="d" placeholder="Short description"></textarea><textarea id="w" placeholder="Why do you recommend it?"></textarea><button class="b" onclick="suggest()">Add to the shelf</button></div>`}
-function suggest(){const t=val('t').trim();if(!t)return toast('A title is needed');db.collection('books').add({title:t,author:val('a'),genre:val('ge')||'Fiction',link:val('l'),desc:val('d'),why:val('w'),status:'suggested',by:uid,ts:Date.now(),chapters:20}).then(()=>toast('Suggestion added'))}
+ <div class="card"><h2>Suggest a book</h2><input id="t" placeholder="Title"><input id="a" placeholder="Author"><input id="ge" placeholder="Genre"><input id="img" placeholder="Book cover image URL (optional)"><input id="l" placeholder="Goodreads link (optional)"><textarea id="d" placeholder="Short description"></textarea><textarea id="w" placeholder="Why do you recommend it?"></textarea><button class="b" onclick="suggest()">Add to the shelf</button></div>`}
+function suggest(){
+  const t=val('t').trim();
+  if(!t)return toast('A title is needed');
+  db.collection('books').add({
+    title:t,author:val('a'),genre:val('ge')||'Fiction',
+    image:val('img').trim(),link:val('l'),desc:val('d'),why:val('w'),
+    status:'suggested',by:uid,ts:Date.now(),chapters:20
+  }).then(()=>toast('Suggestion added'));
+}
 function vote(id){const r=db.doc('votes/'+id+'_'+uid);voted(id)?r.delete():r.set({book:id,uid})}
 function toggleVote(){db.doc('meta/club').set({closed:!closed()})}
 function pick(id){if(!confirm('Make this the current book?'))return;S.books.filter(b=>b.status=='current').forEach(b=>db.doc('books/'+b.id).update({status:'archived',done:Date.now()}));db.doc('books/'+id).update({status:'current',start:Date.now()});db.doc('meta/club').set({closed:false})}
@@ -105,7 +127,7 @@ function react(id){const r=db.doc('reacts/'+id+'_'+uid);S.reacts.some(x=>x.id==i
 function review(b){db.doc('reviews/'+b+'_'+uid).set({book:b,by:uid,stars:+val('rs'),text:val('rt')}).then(()=>toast('Review saved'))}
 function events(){const L=[...S.events].sort((a,c)=>a.date<c.date?-1:1);
  return `<h1>Club Events</h1>${L.map(e=>{const r=S.rsvps.filter(x=>x.ev==e.id).length,m=S.rsvps.some(x=>x.id==e.id+'_'+uid);return `<div class="card flex" style="justify-content:space-between"><div><span class="tag">${esc(e.kind)}</span><b>${esc(e.title)}</b><div class="mute">${new Date(e.date).toLocaleString([], {dateStyle:'full',timeStyle:'short'})} · ${r} going</div></div><div class="flex"><button class="b ${m?'g':''}" onclick="rsvp('${e.id}')">${m?'Going ✓':'RSVP'}</button>${admin?`<button class="b g" onclick="del('events/${e.id}')">✕</button>`:''}</div></div>`}).join('')||'<p class="mute">Nothing scheduled.</p>'}
- ${admin?`<div class="card"><h3>Add event (admin)</h3><input id="et" placeholder="Title"><select id="ek"><option>Meeting</option><option>Discussion</option><option>Reading deadline</option><option>Voting period</option><option>Literary event</option></select><input id="ed" type="datetime-local"><button class="b" onclick="addEv()">Create</button></div>`:''}`}
+ ${admin?`<div class="card"><h3>Add event</h3><input id="et" placeholder="Title"><select id="ek"><option>Meeting</option><option>Discussion</option><option>Reading deadline</option><option>Voting period</option><option>Literary event</option></select><input id="ed" type="datetime-local"><button class="b" onclick="addEv()">Create</button></div>`:''}`}
 function addEv(){if(!val('et')||!val('ed'))return;db.collection('events').add({title:val('et'),kind:val('ek'),date:new Date(val('ed')).toISOString()})}
 function rsvp(id){const r=db.doc('rsvps/'+id+'_'+uid);S.rsvps.some(x=>x.id==id+'_'+uid)?r.delete():r.set({ev:id,uid})}
 function arch(){const L=S.books.filter(b=>b.status=='archived').sort((a,c)=>(c.done||0)-(a.done||0));
@@ -115,15 +137,55 @@ function me(){const bio=S.bios.find(x=>x.id==uid)||{},rv=S.reviews.filter(r=>r.b
  <div class="card"><h3>About me</h3><textarea id="bb" placeholder="Short biography">${esc(bio.bio||'')}</textarea><input id="bg" placeholder="Favorite genres" value="${esc(bio.genres||'')}"><input id="bq" placeholder="Favorite literary quote" value="${esc(bio.quote||'')}"><button class="b" onclick="db.doc('bios/'+uid).set({bio:val('bb'),genres:val('bg'),quote:val('bq')}).then(()=>toast('Profile saved'))">Save</button></div>
  <h3>Members</h3>${S.bios.filter(x=>x.id!=uid).map(x=>`<div class="card"><b>${esc(nm(x.id))}</b><div class="mute">${esc(x.genres)}</div><i>${esc(x.quote)}</i><p>${esc(x.bio)}</p></div>`).join('')}
  <h3>My suggestions</h3>${sg.map(b=>`<div class="mute">• ${esc(b.title)} — ${vc(b.id)} votes</div>`).join('')||'<span class="mute">None yet.</span>'}`}
-async function seed(){const d=864e5,B=[
- ['The Remains of the Day','Kazuo Ishiguro','Literary','A butler’s motor trip through England becomes a reckoning with loyalty and regret.','current',24],
- ['Piranesi','Susanna Clarke','Fantasy','A man lives in an endless house of tides and statues, keeping careful journals.','suggested',20],
- ['Pachinko','Min Jin Lee','Historical','Four generations of a Korean family in Japan.','suggested',24],
- ['The Secret History','Donna Tartt','Mystery','A circle of classics students and a fatal secret.','suggested',18],
- ['Middlemarch','George Eliot','Classic','Provincial lives entwined in a changing England.','archived',30]];
- for(const [t,a,g,ds,s,c] of B)await db.collection('books').add({title:t,author:a,genre:g,desc:ds,why:'It stayed with me long after the last page.',link:'',status:s,chapters:c,by:uid,ts:Date.now(),start:Date.now()-60*d,done:s=='archived'?Date.now()-20*d:null});
- const E=[['Meeting: The Remains of the Day','Meeting',9],['Reading deadline: Part Three','Reading deadline',4],['Voting closes','Voting period',14]];
- for(const [t,k,n] of E)await db.collection('events').add({title:t,kind:k,date:new Date(Date.now()+n*d).toISOString()});
- toast('Sample data loaded')}
+async function setupReadingRoom(){
+  // Remove old demo books and events left by the previous sample-data version.
+  const oldBookTitles=['Piranesi','Pachinko','The Secret History','Middlemarch'];
+  const oldEventTitles=['Meeting: The Remains of the Day','Reading deadline: Part Three','Voting closes'];
+  for(const b of [...S.books]){
+    if(oldBookTitles.includes(b.title)) await db.doc('books/'+b.id).delete();
+  }
+  for(const e of [...S.events]){
+    if(oldEventTitles.includes(e.title)) await db.doc('events/'+e.id).delete();
+  }
+
+  // Ensure the requested book is present and marked as the current read.
+  let book=S.books.find(b=>b.title.trim().toLowerCase()==='before the coffee gets cold');
+  if(!book){
+    await db.collection('books').add({
+      title:'Before the Coffee Gets Cold',
+      author:'Toshikazu Kawaguchi',
+      genre:'Literary fiction',
+      desc:'In a small Tokyo café, visitors can travel to the past—but only under very particular rules.',
+      why:'Our current book-club read.',
+      image:'https://www.cadillaclibrary.org/book-groups/book-group-images/before-the-coffee-gets-cold.jpg/@@images/image-1200-4f08e2abb9c64ed16f74a240e7e23b8e.jpeg',
+      link:'',
+      status:'current',
+      by:uid,
+      ts:Date.now(),
+      chapters:24,
+      start:Date.now()
+    });
+  }else{
+    await db.doc('books/'+book.id).update({
+      title:'Before the Coffee Gets Cold',
+      author:'Toshikazu Kawaguchi',
+      status:'current',
+      image:'https://www.cadillaclibrary.org/book-groups/book-group-images/before-the-coffee-gets-cold.jpg/@@images/image-1200-4f08e2abb9c64ed16f74a240e7e23b8e.jpeg'
+    });
+  }
+
+  // Schedule the next session for 25 November 2026 at 18:00 local time.
+  const session=S.events.find(e=>e.title==='Next Book Club Session');
+  const sessionDate=new Date(2026,10,25,16,0,0).toISOString();
+  if(session){
+    await db.doc('events/'+session.id).update({date:sessionDate});
+  }else{
+    await db.collection('events').add({
+      title:'Next Book Club Session',
+      kind:'Meeting',
+      date:sessionDate
+    });
+  }
+}
 init();
 </script></body></html>
