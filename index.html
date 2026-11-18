@@ -81,8 +81,6 @@ function home(){const b=cur(),ev=S.events.filter(e=>new Date(e.date)>Date.now())
  return `<h1>Welcome to the salon.</h1><p class="mute">A private place for the books we read together.</p>`+
  (admin&&!S.books.length?`<div class="card"><b>Empty club.</b> As administrator you can <button class="b" onclick="seed()">load sample data</button></div>`:'')+
  (b?`<div class="card row">${cover(b,1)}<div class="grow"><span class="tag">Now reading</span><h2>${esc(b.title)}</h2><div class="mute">by ${esc(b.author)} · ${esc(b.genre)}</div><p>${esc(b.desc)}</p>
- <div class="mute">Club progress: chapter ${pr} of ${b.chapters}</div><div class="bar"><i style="width:${pr/b.chapters*100}%"></i></div>
- <p class="mute">Your progress: chapter <b>${my}</b> <button class="b g" onclick="setCh(${Math.max(0,my-1)})">−</button> <button class="b g" onclick="setCh(${Math.min(b.chapters,my+1)})">+</button></p>
  <button class="b" onclick="S.sel='${b.id}';go('talk')">Join the discussion</button></div></div>`:`<div class="card"><h3>No book selected yet</h3><p>Head to the Bookshelf and vote.</p></div>`)+
  `<div class="grid"><div class="card"><h3>Next meeting</h3>${n?`<div class="big" id="cd" data-d="${n.date}"></div><div>${esc(n.title)}</div><div class="mute">${new Date(n.date).toLocaleString([], {dateStyle:'medium',timeStyle:'short'})}</div>`:'<p class="mute">Nothing scheduled.</p>'}</div>
  <div class="card"><h3>Latest activity</h3>${act.map(a=>`<div class="mute">• ${esc(a.s)}</div>`).join('')||'<span class="mute">Quiet for now.</span>'}</div>
@@ -162,7 +160,7 @@ async function setupReadingRoom(){
       status:'current',
       by:uid,
       ts:Date.now(),
-      chapters:24,
+      chapters:4,
       start:Date.now()
     });
   }else{
